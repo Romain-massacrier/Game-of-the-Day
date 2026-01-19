@@ -5,18 +5,19 @@ require_once __DIR__ . "/igdb.php";
 init_db();
 $pdo = db();
 
+// Liste simple: tu gères la plateforme toi meme (plus propre pour ton projet)
 $wanted = [
-    "Super Mario Bros.",
-    "The Legend of Zelda: A Link to the Past",
-    "Sonic the Hedgehog 2",
-    "Final Fantasy VII",
-    "GoldenEye 007",
+    ["title" => "Super Mario Bros.", "platform" => "NES (8-bit)"],
+    ["title" => "The Legend of Zelda: A Link to the Past", "platform" => "SNES (16-bit)"],
+    ["title" => "Sonic the Hedgehog 2", "platform" => "Mega Drive (16-bit)"],
+    ["title" => "Final Fantasy VII", "platform" => "PS1 (32-bit)"],
+    ["title" => "GoldenEye 007", "platform" => "Nintendo 64 (64-bit)"],
 ];
 
 $pdo->beginTransaction();
 
 try {
-    // Option: on repart propre
+    // On repart propre
     $pdo->exec("DELETE FROM game_images;");
     $pdo->exec("DELETE FROM games;");
 
@@ -30,8 +31,11 @@ try {
         VALUES (?, ?, ?)
     ");
 
-    foreach ($wanted as $title) {
-        // Requete IGDB: infos + cover + screenshots
+    foreach ($wanted as $item) {
+        $title = $item["title"];
+        $platform = $item["platform"];
+
+        // Requête IGDB: infos + cover + screenshots
         $q = "
             search \"" . addslashes($title) . "\";
             fields name, first_release_date, summary, cover.url, screenshots.url;
@@ -50,9 +54,9 @@ try {
         $name = $g["name"] ?? $title;
         $summary = $g["summary"] ?? null;
 
+        // epoch -> YYYY-MM-DD
         $release = null;
         if (!empty($g["first_release_date"])) {
-            // epoch -> YYYY-MM-DD
             $release = gmdate("Y-m-d", (int)$g["first_release_date"]);
         }
 
@@ -72,9 +76,7 @@ try {
             }
         }
 
-        // Pour une V1 import, on met une plateforme simple
-        // On ameliorera ensuite avec le vrai mapping plateformes IGDB
-        $platform = "IGDB";
+        // Champs optionnels (on laissera null pour l instant)
         $genre = null;
         $developer = null;
         $publisher = null;
@@ -95,15 +97,15 @@ try {
             $insertImage->execute([$gameId, "cover", $cover]);
         }
 
-        // Limite a 6 screenshots pour rester leger
+        // Limite a 6 screenshots
         $screens = array_slice($screens, 0, 6);
         foreach ($screens as $u) {
             $insertImage->execute([$gameId, "screenshot", $u]);
         }
 
-        echo "Import OK: " . $name . PHP_EOL;
+        echo "Import OK: " . $name . " (" . $platform . ")" . PHP_EOL;
 
-        // Petite pause pour eviter de spammer l API
+        // petite pause pour eviter de spammer l API
         usleep(300000);
     }
 
